@@ -116,7 +116,7 @@ No project-scoped memories yet — this is a fresh project.
 | Printer | Prusa CORE One L, HF0.4 nozzle |
 | Filament | Prusament PETG @COREONE HF0.4 — Matt Blue |
 | Print profile | 0.15mm BALANCED |
-| Infill | 15% |
+| Infill | 20% (raised from 15% for the 15 mm production print, 2026-11-16; job sliced by Prusa cloud slicer: 0.15 mm layers, 53m 31s, 14.78 g PETG) |
 | Supports | For support enforcers only (none painted, so effectively none) |
 | Brim | Off |
 | Orientation | Flat, profile on the bed, Z = `HangerDepth` |
