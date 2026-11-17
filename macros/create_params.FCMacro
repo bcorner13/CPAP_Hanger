@@ -1,0 +1,72 @@
+# -*- coding: utf-8 -*-
+"""create_params.FCMacro — bootstrap / update CPAP_Hanger Params.FCStd (VarSet).
+
+Idempotent: creates Params.FCStd + VarSet if absent, adds any missing variable,
+and NEVER overwrites a value that already exists (tuning after a test print is
+done in the VarSet, not here). Saves Params.FCStd (required before any
+<<Params>>#VarSet.X cross-document expression can resolve — global rule 11).
+"""
+import os, sys, importlib
+import FreeCAD as App
+
+PROJECT = os.path.expanduser(
+    "~/Documents/3dPrinting/Commercial License/CPAP_Hanger")
+sys.path.insert(0, os.path.join(PROJECT, "scripts"))
+import test_env_guard
+importlib.reload(test_env_guard)
+print(test_env_guard.require_laptop(need_freecad=True))
+
+PARAMS_PATH = os.path.join(PROJECT, "Params.FCStd")
+
+# (name, type, group, default, doc)
+VARS = [
+    # --- Hook geometry (Bradley 2026-11-16, remeasured) ---
+    ("HookWall",        "App::PropertyLength", "Hook", 7.0,
+     "Radial wall width of BOTH hooks and the shank (outer R - inner R)"),
+    ("LargeHookInnerD", "App::PropertyLength", "Hook", 40.0,
+     "Inside diameter of the large (lower) hook"),
+    ("SmallHookInnerD", "App::PropertyLength", "Hook", 17.0,
+     "Inside diameter of the small (upper) hook"),
+    # --- Profile placement (current rough-design values) ---
+    ("SmallTipCenterX", "App::PropertyLength", "Layout", 16.0,
+     "Small-hook tip cap centre: distance left of the Y axis"),
+    ("SmallTipCenterY", "App::PropertyLength", "Layout", 70.0,
+     "Small-hook tip cap centre: height above origin"),
+    ("HoseSnapInterference", "App::PropertyLength", "Hook", 1.0,
+     "Small-hook throat is this much narrower than SmallHookInnerD so the "
+     "flex hose snaps in (Bradley 2026-11-16). Replaces the old ShankTopY."),
+    # --- Extrusion / edge treatment ---
+    ("HangerDepth",     "App::PropertyLength", "Body", 15.0,
+     "Pad depth (Z thickness of the printed part)"),
+    ("ChamferSize",     "App::PropertyLength", "Body", 1.0,
+     "Top-face edge chamfer size"),
+]
+
+doc = None
+for d in App.listDocuments().values():
+    if d.FileName and os.path.abspath(d.FileName) == os.path.abspath(PARAMS_PATH):
+        doc = d
+if doc is None:
+    if os.path.exists(PARAMS_PATH):
+        doc = App.openDocument(PARAMS_PATH)
+    else:
+        doc = App.newDocument("Params")
+        doc.saveAs(PARAMS_PATH)
+
+vs = doc.getObject("VarSet")
+if vs is None:
+    vs = doc.addObject("App::VarSet", "VarSet")
+
+added, kept = [], []
+for name, typ, grp, val, tip in VARS:
+    if name in vs.PropertiesList:
+        kept.append(f"{name}={getattr(vs, name)}")
+        continue
+    vs.addProperty(typ, name, grp, tip)
+    setattr(vs, name, val)
+    added.append(f"{name}={val}")
+
+doc.recompute()
+doc.save()
+print("Params added:", added)
+print("Params kept (not overwritten):", kept)

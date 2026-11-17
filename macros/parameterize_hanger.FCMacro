@@ -1,0 +1,221 @@
+# -*- coding: utf-8 -*-
+"""parameterize_hanger.FCMacro — bind CPAP_Hanger's sketch/Pad/Chamfer to Params.
+
+Run create_params.FCMacro first. Idempotent: safe to re-run.
+
+What it does (plan.md, rev 1):
+  1. TANGENT SHANK — replaces the 4 shank-line endpoint Coincidents with
+     endpoint Tangents and drops the 4 arc-sweep Angle constraints (DoF-neutral:
+     -12 equations, +12). The kinked line/arc joints (6-17 deg off tangent) are
+     why the top-face Chamfer produces a self-intersecting, invalid solid.
+  2. Names every dimensional constraint and binds it to <<Params>>#VarSet.*.
+  3. Binds Pad.Length -> HangerDepth, Chamfer.Size -> ChamferSize.
+  4. Recomputes and prints a verification report. Does NOT save.
+
+Constraints are located by signature (type + geometry/point refs), never by
+raw index, and the macro aborts if the sketch topology isn't what it expects.
+"""
+import os, sys, importlib
+import FreeCAD as App
+import Sketcher
+
+PROJECT = os.path.expanduser(
+    "~/Documents/3dPrinting/Commercial License/CPAP_Hanger")
+sys.path.insert(0, os.path.join(PROJECT, "scripts"))
+import test_env_guard
+importlib.reload(test_env_guard)
+print(test_env_guard.require_laptop(need_freecad=True))
+
+TANGENT_SHANK = True
+P = "<<Params>>#VarSet."
+
+HANGER_PATH = os.path.join(PROJECT, "CPAP_Hanger.FCStd")
+PARAMS_PATH = os.path.join(PROJECT, "Params.FCStd")
+
+
+def find_doc(path):
+    for d in App.listDocuments().values():
+        if d.FileName and os.path.abspath(d.FileName) == os.path.abspath(path):
+            return d
+    return App.openDocument(path)
+
+
+params = find_doc(PARAMS_PATH)
+if params.getObject("VarSet") is None:
+    raise RuntimeError("Params.FCStd has no VarSet — run create_params.FCMacro first")
+doc = find_doc(HANGER_PATH)
+sk, pad, ch = doc.getObject("Sketch"), doc.getObject("Pad"), doc.getObject("Chamfer")
+doc.openTransaction("parameterize_hanger")  # one Ctrl-Z undoes the whole run
+
+# ---- Topology guard ---------------------------------------------------------
+# geo: 0 small tip cap, 1 small outer, 2 small inner, 3 large tip cap,
+#      4 large outer, 5 large inner, 6/7 shank lines
+EXPECT = ["ArcOfCircle"] * 6 + ["LineSegment"] * 2
+got = [type(g).__name__ for g in sk.Geometry]
+if got != EXPECT:
+    raise RuntimeError(f"Sketch geometry changed; expected {EXPECT}, got {got}. Aborting.")
+
+
+def find(ctype, first, firstpos=None, second=None, secondpos=None):
+    hits = []
+    for i, c in enumerate(sk.Constraints):
+        if c.Type != ctype or c.First != first:
+            continue
+        if firstpos is not None and c.FirstPos != firstpos:
+            continue
+        if second is not None and c.Second != second:
+            continue
+        if secondpos is not None and c.SecondPos != secondpos:
+            continue
+        hits.append(i)
+    return hits
+
+
+# ---- 1. Tangent shank -------------------------------------------------------
+JOINTS = [(6, 1, 2, 1), (6, 2, 4, 1), (7, 1, 5, 1), (7, 2, 1, 1)]
+if TANGENT_SHANK:
+    have_tangent = [bool(find("Tangent", l, lp, a, ap)) for l, lp, a, ap in JOINTS]
+    if all(have_tangent):
+        print("Tangent shank: already applied, skipping")
+    elif any(have_tangent):
+        raise RuntimeError("Tangent shank partially applied — inspect sketch manually")
+    else:
+        drop = []
+        for l, lp, a, ap in JOINTS:
+            drop += find("Coincident", l, lp, a, ap)
+        for g in (1, 2, 4, 5):
+            drop += [i for i in find("Angle", g) if sk.Constraints[i].Second == -2000]
+        if len(drop) != 8:
+            raise RuntimeError(f"Expected 4 Coincident + 4 sweep Angle, found {len(drop)}")
+        for i in sorted(drop, reverse=True):
+            sk.delConstraint(i)
+        for l, lp, a, ap in JOINTS:
+            sk.addConstraint(Sketcher.Constraint("Tangent", l, lp, a, ap))
+        print("Tangent shank: replaced 4 Coincident + 4 Angle with 4 endpoint Tangents")
+        sk.solve()
+
+# ---- 1b. Small-hook hose gap (rev 4) ----------------------------------------
+# The small hook wraps > 180 deg so it closes around (grabs) the CPAP flex
+# hose. Bradley's spec (2026-11-16): the ACTUAL entry gap the hose squeezes
+# through — tip cap to the shank's inner straight edge (line6) — is
+# SmallHookInnerD - HoseSnapInterference. Constraint: point-to-line Distance
+# from the tip-cap centre (0/3) to line6 = gap + cap radius (HookWall/2).
+# The wrap angle is derived (~203.5 deg at 17/1).
+#
+# History (why not the alternatives):
+#  rev 2  Distance lip->joint chord: a chord fits TWO wraps; solver took the
+#         open ~140 deg branch, hook didn't close.
+#  rev 3  Angle on the wrap (219.5 deg): closed, but the real entry gap was
+#         14.26 (tip comes nearest the straight shank edge, not the joint).
+# Migration replaces any DoF-holder: SmallHookWrap / SmallThroat / ShankTopY.
+# The solver is walked onto the CLOSED branch first (temporary wrap angle),
+# then the gap is stepped to target, so it can't land on an open solution.
+import math
+vs = params.getObject("VarSet")
+if "HoseSnapInterference" not in vs.PropertiesList:
+    vs.addProperty("App::PropertyLength", "HoseSnapInterference", "Hook",
+                   "Small-hook hose entry gap is this much narrower than SmallHookInnerD")
+    vs.HoseSnapInterference = 1.0
+GAP_EXPR = f"{P}SmallHookInnerD - {P}HoseSnapInterference + {P}HookWall / 2"
+
+
+def step_datum(ci, start, end, unit, max_step):
+    n = max(1, int(abs(end - start) / max_step) + 1)
+    for k in range(1, n + 1):
+        sk.setDatum(ci, App.Units.Quantity(f"{start + (end - start) * k / n} {unit}"))
+        if sk.solve() != 0:
+            raise RuntimeError(f"Solver failed stepping constraint {ci} at {k}/{n}")
+
+
+if not [c for c in sk.Constraints if c.Name == "SmallHookGap"]:
+    old = [i for i, c in enumerate(sk.Constraints)
+           if c.Name in ("SmallHookWrap", "SmallThroat", "ShankTopY")] \
+        or find("DistanceY", -1, 1, 1, 1)
+    if len(old) != 1:
+        raise RuntimeError(f"DoF-holder not found uniquely: {old}")
+    oname = sk.Constraints[old[0]].Name
+    if oname:
+        sk.setExpression(f".Constraints.{oname}", None)
+    sk.delConstraint(old[0])
+    # 1) get onto the closed branch: temporary wrap angle -> 215 deg
+    g2 = sk.Geometry[2]
+    wrap = math.degrees(g2.LastParameter - g2.FirstParameter)
+    sk.addConstraint(Sketcher.Constraint("Angle", 2, math.radians(wrap)))
+    tmp = len(sk.Constraints) - 1
+    if wrap < 210:
+        step_datum(tmp, wrap, 215.0, "deg", 10.0)
+    sk.delConstraint(tmp)
+    # 2) gap constraint at its current value, then step to target
+    l6 = sk.Geometry[6]
+    dvec = l6.EndPoint - l6.StartPoint
+    v = sk.Geometry[0].Center - l6.StartPoint
+    cur = abs(v.x * dvec.y - v.y * dvec.x) / dvec.Length
+    target = (vs.SmallHookInnerD.Value - vs.HoseSnapInterference.Value
+              + vs.HookWall.Value / 2)
+    sk.addConstraint(Sketcher.Constraint("Distance", 0, 3, 6, cur))
+    ci = len(sk.Constraints) - 1
+    sk.renameConstraint(ci, "SmallHookGap")
+    step_datum(ci, cur, target, "mm", 0.5)
+    print(f"Gap: replaced {oname or 'DistanceY'} with SmallHookGap "
+          f"(cap-centre->line {cur:.3f} -> {target:.3f} mm)")
+
+# ---- 2. Name + bind dimensional constraints ---------------------------------
+BIND = [
+    # name,          locator,                       expression
+    ("LargeOuterR", ("Radius", 4),                  f"{P}LargeHookInnerD / 2 + {P}HookWall"),
+    ("LargeInnerR", ("Radius", 5),                  f"{P}LargeHookInnerD / 2"),
+    ("SmallOuterR", ("Radius", 1),                  f"{P}SmallHookInnerD / 2 + {P}HookWall"),
+    ("SmallInnerR", ("Radius", 2),                  f"{P}SmallHookInnerD / 2"),
+    ("SmallTipY",   ("DistanceY", -1, 1, 0, 3),     f"{P}SmallTipCenterY"),
+    ("SmallHookGap", ("Distance", 0, 3, 6),        GAP_EXPR),
+    ("SmallTipX",   ("Distance", 0, 3, -2),         f"{P}SmallTipCenterX"),
+]
+for name, loc, expr in BIND:
+    idx = [i for i, c in enumerate(sk.Constraints) if c.Name == name]
+    if not idx:
+        idx = find(*loc)
+        if len(idx) != 1:
+            raise RuntimeError(f"{name}: expected 1 match for {loc}, found {idx}")
+        sk.renameConstraint(idx[0], name)
+    sk.setExpression(f".Constraints.{name}", expr)
+
+# ---- 3. Feature bindings ----------------------------------------------------
+pad.setExpression("Length", f"{P}HangerDepth")
+ch.setExpression("Size", f"{P}ChamferSize")
+
+# ---- 3b. Drop the dead ShankTopY Param (superseded by SmallThroat) ----------
+if "ShankTopY" in vs.PropertiesList:
+    users = [(o.Name, p) for d in App.listDocuments().values() for o in d.Objects
+             for p, e in o.ExpressionEngine if "ShankTopY" in e and o.Name != "VarSet"]
+    if users:
+        raise RuntimeError(f"ShankTopY still referenced by {users}; not removing")
+    vs.removeProperty("ShankTopY")
+    print("Removed dead Param ShankTopY")
+
+# ---- 4. Recompute + report --------------------------------------------------
+params.recompute()
+doc.recompute()
+doc.commitTransaction()
+print("Sketch DoF:", sk.DoF, "FullyConstrained:", sk.FullyConstrained,
+      "Redundant:", list(sk.RedundantConstraints),
+      "Conflicting:", list(sk.ConflictingConstraints),
+      "Malformed:", list(sk.MalformedConstraints))
+r = {c.Name: round(c.Value, 3) for c in sk.Constraints if c.Name}
+print("Bound values:", r)
+for o in (pad, ch, doc.getObject("Body")):
+    s = o.Shape
+    bb = s.BoundBox
+    print(f"{o.Name}: state={list(o.State)} valid={s.isValid()} "
+          f"vol={s.Volume:.1f} bbox=({bb.XLength:.2f} x {bb.YLength:.2f} x {bb.ZLength:.2f})")
+import Part
+G = sk.Geometry
+cap = G[0].toShape()
+l6 = Part.makeCompound([G[6].toShape(), Part.Vertex(G[6].StartPoint)])
+d = G[6].EndPoint - G[6].StartPoint
+t = (G[0].Center - G[6].StartPoint).dot(d) / d.Length
+chord = (sk.getPoint(2, 2) - G[6].StartPoint).Length
+wrap = math.degrees(G[2].LastParameter - G[2].FirstParameter)
+print(f"Small hook: wrap {wrap:.2f} deg (must be > 180 to grab), "
+      f"mouth chord lip->joint {chord:.3f} mm, "
+      f"true min tip->shank gap {cap.distToShape(l6)[0]:.3f} mm")
+print("NOT SAVED — review in the GUI, then save both documents if happy.")
