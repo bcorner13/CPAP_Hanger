@@ -108,7 +108,7 @@ No project-scoped memories yet — this is a fresh project.
 
 ## Print profile
 
-**Test print at 5 mm depth succeeded (2026-11-16): the hose clip works.** Slicer setup from Bradley's PrusaSlicer screenshot (2026-11-16):
+**Production print at 15 mm depth / 20% infill succeeded (2026-11-16, Core01, Prusa Connect job sliced by the cloud slicer). The earlier 5 mm test print proved the hose clip.** This is the known-good profile: Slicer setup from Bradley's PrusaSlicer screenshot (2026-11-16):
 
 | Setting | Value |
 |---|---|
