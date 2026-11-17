@@ -43,7 +43,7 @@ The **small hook** grips the CPAP flex hose (snap-in through the undersized thro
 | `Params.FCStd` | VarSet — all parametric variables | — | ✅ created 2026-11-16 by `create_params.FCMacro` |
 | `CPAP_Hanger.FCStd` | Hanger body (doc internal name `Unnamed`, label `CPAP_Hanger`) | `Params.FCStd` (after rev 1) | ✅ fully bound, Chamfer valid, audit clean — saved 2026-11-16 |
 
-**CPAP_Hanger.FCStd history:** before rev 1, the Chamfer (`Pad.Face10`, top face, 1 mm) recomputes "Up-to-date" but its shape fails `isValid()` (self-intersecting wires / unorientable). This was diagnosed on 2026-11-16: the 4 shank line↔arc joints are 6–17° kinks, and the chamfer fails even per-edge and at 0.5 mm. Fixed by the rev 1 tangent joints; flex-tested at large Ø30–46 (Ø30 breaks the Pad). `3mf/` and `stl/CPAP_Hanger-BodyChamfer.*` were re-exported 2026-11-16 from the valid rev 4 solid (watertight). The 5 mm-deep test print worked, and they were re-exported again at the 15 mm production depth (54 × 111.67 × 15 mm, vol 20037 mm³). **Bottom chamfer (Bradley, 2026-11-16):** `Chamfer.Base` is now `Pad` faces `Face10` (top, z = HangerDepth) + `Face9` (bottom, z = 0), both sized by `ChamferSize`. Volume 19843.5 mm³. Audit clean, and it was flex-tested at LargeHookInnerD 46, SmallHookInnerD 20 and HangerDepth 10 with the faces still mapped correctly. If the top and bottom ever need different sizes, add a `BottomChamferSize` Param rather than reusing `ChamferSize`. **The `stl/` and `3mf/` exports predate the bottom chamfer and are stale until they are re-exported.**
+**CPAP_Hanger.FCStd history:** before rev 1, the Chamfer (`Pad.Face10`, top face, 1 mm) recomputes "Up-to-date" but its shape fails `isValid()` (self-intersecting wires / unorientable). This was diagnosed on 2026-11-16: the 4 shank line↔arc joints are 6–17° kinks, and the chamfer fails even per-edge and at 0.5 mm. Fixed by the rev 1 tangent joints; flex-tested at large Ø30–46 (Ø30 breaks the Pad). `3mf/` and `stl/CPAP_Hanger-BodyChamfer.*` were re-exported 2026-11-16 from the valid rev 4 solid (watertight). The 5 mm-deep test print worked, and they were re-exported again at the 15 mm production depth (54 × 111.67 × 15 mm, vol 20037 mm³). **Bottom chamfer (Bradley, 2026-11-16):** `Chamfer.Base` is now `Pad` faces `Face10` (top, z = HangerDepth) + `Face9` (bottom, z = 0), both sized by `ChamferSize`. Volume 19843.5 mm³. Audit clean, and it was flex-tested at LargeHookInnerD 46, SmallHookInnerD 20 and HangerDepth 10 with the faces still mapped correctly. If the top and bottom ever need different sizes, add a `BottomChamferSize` Param rather than reusing `ChamferSize`. `stl/` and `3mf/CPAP_Hanger-BodyChamfer.*` were re-exported with the bottom chamfer on 2026-11-17 at mesh tolerance 0.01: 3740 facets, solid, no non-manifold edges or self-intersections, 54 × 111.67 × 15 mm, mesh volume 19840.2 mm³. The export tool's default tolerance of 0.1 gives only 992 facets and loses about 30 mm³ on the arcs, so always pass `mesh_tolerance=0.01`.
 
 ---
 
@@ -100,7 +100,7 @@ No project-scoped memories yet — this is a fresh project.
 
 **Project-specific:**
 
-- The hanger document's internal name is `Unnamed` (label `CPAP_Hanger`). Macros find documents by file path, not name.
+- The hanger document's internal name was `Unnamed` and is `CPAP_Hanger` when freshly opened from disk (label `CPAP_Hanger`). Close other projects first: they may have their own `Params` doc (MagicCardBox does), and `<<Params>>` would be ambiguous. Macros find documents by file path, not name.
 - The project-scoped `.claude/settings.local.json` enables the `freecad` MCP server for this folder.
 - The PreToolUse guard also blocks Bash heredocs that mention `.FCStd` together with `cat` (bit `.gitignore` creation at bootstrap). Use the Write tool for such files.
 
@@ -120,6 +120,6 @@ No project-scoped memories yet — this is a fresh project.
 | Supports | For support enforcers only (none painted, so effectively none) |
 | Brim | Off |
 | Orientation | Flat, profile on the bed, Z = `HangerDepth` |
-| File | `3mf/CPAP_Hanger-BodyChamfer.3mf`: 54 × 111.67 × 15 mm, vol 20037.31 mm³, 2588 facets, 1 shell, "No errors detected" |
+| File | `3mf/CPAP_Hanger-BodyChamfer.3mf`: 54 × 111.67 × 15 mm. Now includes the bottom chamfer (2026-11-17, 3740 facets, vol 19840 mm³); the successful production print used the earlier top-chamfer-only export (2588 facets, 20037 mm³) |
 
 The screenshot shows the 15 mm production export loaded with these settings. The successful test print was the 5 mm version; this assumes it used the same profile.
