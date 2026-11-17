@@ -108,4 +108,18 @@ No project-scoped memories yet — this is a fresh project.
 
 ## Print profile
 
-**Test print at 5 mm depth succeeded (2026-11-16): the hose clip works.** Printer/material/settings not recorded yet.
+**Test print at 5 mm depth succeeded (2026-11-16): the hose clip works.** Slicer setup from Bradley's PrusaSlicer screenshot (2026-11-16):
+
+| Setting | Value |
+|---|---|
+| Slicer | PrusaSlicer (Expert mode) |
+| Printer | Prusa CORE One L, HF0.4 nozzle |
+| Filament | Prusament PETG @COREONE HF0.4 — Matt Blue |
+| Print profile | 0.15mm BALANCED |
+| Infill | 15% |
+| Supports | For support enforcers only (none painted, so effectively none) |
+| Brim | Off |
+| Orientation | Flat, profile on the bed, Z = `HangerDepth` |
+| File | `3mf/CPAP_Hanger-BodyChamfer.3mf`: 54 × 111.67 × 15 mm, vol 20037.31 mm³, 2588 facets, 1 shell, "No errors detected" |
+
+The screenshot shows the 15 mm production export loaded with these settings. The successful test print was the 5 mm version; this assumes it used the same profile.
