@@ -32,7 +32,7 @@ Single printed part, no assembly. The profile lies in the XY plane and is padded
   - When migrating, the macro first walks the solver onto the closed branch with a temporary wrap angle, then steps the gap. A point-to-line distance has a mirror solution, so don't jump big values in one go.
 - Wall width is `HookWall` everywhere (both hooks; caps are HookWall/2 by tangency).
 
-The **small hook** grips the CPAP flex hose (snap-in through the undersized throat). What the large hook hangs on isn't recorded yet. Ask Bradley.
+The **small hook** grips the CPAP flex hose (snap-in through the undersized throat). The **large hook** hangs on the **bed frame rail** (Bradley, 2026-11-16). `LargeHookInnerD` (40) is the knob if a different rail doesn't fit. The rail is a hang-over fit, not a clip, so it has no clearance Param. If it ever needs one, add `RailHookClearance` rather than reusing `HoseSnapInterference`.
 
 ---
 

@@ -86,3 +86,4 @@ Constraints are located by signature, not index. The macro aborts if the topolog
 - Approve **tangent shank** (needed to fix the Chamfer)? If no, the Chamfer stays invalid, and I would parameterize the 4 sweep angles instead.
 - The large hook gets much smaller (Ø46 → Ø40), so the shank re-solves. If the new shape looks off in the screenshot, `SmallTipCenterX/Y` are the knobs (`ShankTopY` was removed in rev 2).
 - ~~Git remote~~ — done 2026-11-16: public repo https://github.com/bcorner13/CPAP_Hanger (`main` + `develop`).
+- ~~What does the large hook hang on?~~ The bed frame rail (Bradley, 2026-11-16).
