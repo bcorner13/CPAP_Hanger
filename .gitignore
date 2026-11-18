@@ -16,3 +16,4 @@ __pycache__/
 
 # Claude Code — ignore personal local state, keep the committed guard hook
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
