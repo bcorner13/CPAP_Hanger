@@ -17,3 +17,7 @@ __pycache__/
 # Claude Code — ignore personal local state, keep the committed guard hook
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Other AI agent tooling (local, not part of the project)
+.codex/
+AGENTS.md
